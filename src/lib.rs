@@ -11,8 +11,11 @@ use std::io::ErrorKind;
 /// is interpreted in a platform-specific way at compile time. So, for instance, an
 /// invocation with a Windows path containing backslashes \ would not compile
 /// correctly on Unix.
+/// 
+/// Will try to invoke the compiler if it is in **$PATH** or if a directory named
+/// "blueprint-compiler" with *blueprint-compiler.py* is found in the *Project Root*.
 ///
-///This macro will yield an expression of type `&'static str` which is the compiled
+/// This macro will yield an expression of type `&'static str` which is the compiled
 /// UI XML of the Blueprint.
 pub fn include_blp(input: TokenStream) -> TokenStream {
     let ast: LitStr = syn::parse(input).unwrap();
@@ -97,10 +100,14 @@ pub fn include_blp(input: TokenStream) -> TokenStream {
 
 /// Uses the installed blueprint-compiler python script to compile `.blp` files to
 /// `UI XML` that can be used by *GtkBuilder*. The compiler needs to be accessible
-/// through the **$PATH** envirnoment variable.
+/// through the **$PATH** envirnoment variable or it needs to be in
+/// "blueprint-compiler/blueprint-compiler.py" in the Project Root.
+/// 
+/// The `Ok(String)` is wrapped in `r###"{}"###` because it is meant to be parsed into
+/// a TokenStream and placed in Rust source code.
 fn compile_blp(path: &str) -> Result<String, String> {
-    // TODO: Invoke blueprint-compiler from $PATH
-    let mut compiler = Command::new("/home/marti/source/blueprint-compiler/blueprint-compiler.py");
+    // Invoke compiler from $PATH
+    let mut compiler = Command::new("blueprint-compiler.py");
     compiler.arg("compile");
     compiler.arg(path);
 
@@ -108,19 +115,27 @@ fn compile_blp(path: &str) -> Result<String, String> {
     let output = match compiler.output() {
         Ok(output) => output,
         Err(error) =>
-            return if error.kind() == ErrorKind::NotFound {
-                Err("Blueprint Compiler not found. Make sure it is in $PATH".to_string())
+            if error.kind() == ErrorKind::NotFound {
+                // Try to invoke compiler from project root "blueprint-compiler/blueprint-compiler.py"
+                let mut compiler = Command::new("./blueprint-compiler/blueprint-compiler.py");
+                compiler.arg("compile");
+                compiler.arg(path);
+
+                match compiler.output() {
+                    Ok(output) => output,
+                    Err(error) => 
+                        return Err(if error.kind() == ErrorKind::NotFound {
+                            "Blueprint Compiler not found. Make sure it is in $PATH or ./blueprint-compiler/blueprint-compiler.py".to_string()
+                        } else {
+                            "Unknown error occurred while invoking compiler".to_string()
+                        })
+                }
             } else {
-                Err("Unknown error occurred while invoking compiler".to_string())
+                return Err("Unknown error occurred while invoking compiler".to_string())
             }
     };
 
     let compiled_blp = String::from_utf8(output.stdout).unwrap();
-    
-    match output.status.code() {
-        Some(code) if code > 0 => println!("blueprint-compiler exit code: {}", code),
-        _ => {}
-    };
 
     if output.status.success() {
         Ok(format!("r###\"{}\"###", compiled_blp))
