@@ -1,5 +1,6 @@
 [package]
 name = "gtk-blueprint"
+description = "Use Blueprint in Rust GTK applications"
 version = "0.1.0"
 repository = "https://github.com/Megadash452/gtk-blueprint"
 readme = "README.md"
