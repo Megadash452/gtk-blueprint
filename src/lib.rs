@@ -5,7 +5,7 @@ use std::io::ErrorKind;
 
 
 #[proc_macro]
-/// Includes a GtkUI comiled from a Blueprint file as a string.
+/// Includes a GtkUI compiled from a Blueprint file as a string.
 ///
 /// The file is located relative to the *Project Root* directory. The provided path
 /// is interpreted in a platform-specific way at compile time. So, for instance, an
