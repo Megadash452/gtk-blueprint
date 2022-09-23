@@ -1,0 +1,16 @@
+[package]
+name = "gtk-blueprint"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0.100"
+# phf = { version = "0.11.1", default-features = false } # for compiled equivalent of hashmap
+
+# [build-dependencies]
+# phf_codegen = "0.11.1"
