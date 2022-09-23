@@ -19,11 +19,8 @@ pub fn include_blp(input: TokenStream) -> TokenStream {
     
     match compile_blp(&ast.value()) {
         Ok(xml) => xml.parse().unwrap(),
-        Err(error) => {
-            // TODO: How to throw out a proper error?
-            eprintln!("{error}");
-            "".parse().unwrap()
-        }
+        // TODO: compile_error!() instead of panic!()
+        Err(error) => panic!("blueprint-compiler error: {}", error)
     }
 }
 
@@ -131,6 +128,9 @@ fn compile_blp(path: &str) -> Result<String, String> {
         // When blueprint-compiler reaches an error in the blueprint file's source code
         // it will exit with 1 and the error info in stdout. Other errors will be written
         // to stderr. To show all errors, return Err Result with both stdout and stderr
-        Err(format!("{}\n{}", compiled_blp, String::from_utf8(output.stderr).unwrap()))
+        Err(match output.status.code() {
+            Some(code) => format!("blueprint-compiler exit code: {}\n{}\n{}", code, compiled_blp, String::from_utf8(output.stderr).unwrap()),
+            None => format!("{}\n{}", compiled_blp, String::from_utf8(output.stderr).unwrap())
+        })
     }
 }
