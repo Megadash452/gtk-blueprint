@@ -1,6 +1,10 @@
 [package]
 name = "gtk-blueprint"
 version = "0.1.0"
+repository = "https://github.com/Megadash452/gtk-blueprint"
+readme = "README.md"
+license = "GPL-3.0"
+keywords = ["gtk", "blueprint"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
