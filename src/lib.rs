@@ -18,10 +18,11 @@ use std::io::ErrorKind;
 /// This macro will yield an expression of type `&'static str` which is the compiled
 /// UI XML of the Blueprint.
 pub fn include_blp(input: TokenStream) -> TokenStream {
+    // TODO: trigger a rebuild if .blp file has changed
     let ast: LitStr = syn::parse(input).unwrap();
     
     match compile_blp(&ast.value()) {
-        Ok(xml) => xml.parse().unwrap(),
+        Ok(xml) => format!("r###\"{}\"###", xml).parse().unwrap(),
         // TODO: compile_error!() instead of panic!()
         Err(error) => panic!("blueprint-compiler error: {}", error)
     }
@@ -102,50 +103,53 @@ pub fn include_blp(input: TokenStream) -> TokenStream {
 /// `UI XML` that can be used by *GtkBuilder*. The compiler needs to be accessible
 /// through the **$PATH** envirnoment variable or it needs to be in
 /// "blueprint-compiler/blueprint-compiler.py" in the Project Root.
-/// 
-/// The `Ok(String)` is wrapped in `r###"{}"###` because it is meant to be parsed into
-/// a TokenStream and placed in Rust source code.
 fn compile_blp(path: &str) -> Result<String, String> {
-    // Invoke compiler from $PATH
-    let mut compiler = Command::new("blueprint-compiler.py");
-    compiler.arg("compile");
-    compiler.arg(path);
+    /* These are commands that the function could use as the compiler. The ones with
+       the "./" prefix are in the $PATH environment variable, and the ones that have
+       that prefix are relative to the current project's root directory. */
+    let possible_compilers = [
+        // Rank by which one is more likely
+        &mut Command::new("blueprint-compiler"),
+        &mut Command::new("./blueprint-compiler/blueprint-compiler.py"),
+        &mut Command::new("blueprint-compiler.py"),
+        &mut Command::new("./blueprint-compiler/blueprint-compiler"),
+    ];
 
-    // Try to run blueprint-compiler and Check that compiler is installed in the system
-    let output = match compiler.output() {
-        Ok(output) => output,
-        Err(error) =>
-            if error.kind() == ErrorKind::NotFound {
-                // Try to invoke compiler from project root "blueprint-compiler/blueprint-compiler.py"
-                let mut compiler = Command::new("./blueprint-compiler/blueprint-compiler.py");
-                compiler.arg("compile");
-                compiler.arg(path);
+    /* Try to find the right compiler in one of the above locations.
+       Use whichever one is successful */
+    for compiler in possible_compilers {
+        compiler.arg("compile");
+        compiler.arg(path);
 
-                match compiler.output() {
-                    Ok(output) => output,
-                    Err(error) => 
-                        return Err(if error.kind() == ErrorKind::NotFound {
-                            "Blueprint Compiler not found. Make sure it is in $PATH or ./blueprint-compiler/blueprint-compiler.py".to_string()
-                        } else {
-                            "Unknown error occurred while invoking compiler".to_string()
-                        })
+        /* The output contains the command's exit status, stdout, and stderr.
+           When Command::output() returns an Err, it means that the command could
+           not run for some reason */
+        let output = match compiler.output() {
+            Ok(output) => output,
+            Err(error) =>
+                if error.kind() == ErrorKind::NotFound {
+                    // Try another command
+                    continue
+                } else {
+                    return Err(format!("Unknown error occurred while invoking compiler:\n{}", error))
                 }
-            } else {
-                return Err("Unknown error occurred while invoking compiler".to_string())
-            }
-    };
+        };
 
-    let compiled_blp = String::from_utf8(output.stdout).unwrap();
-
-    if output.status.success() {
-        Ok(format!("r###\"{}\"###", compiled_blp))
-    } else {
-        // When blueprint-compiler reaches an error in the blueprint file's source code
-        // it will exit with 1 and the error info in stdout. Other errors will be written
-        // to stderr. To show all errors, return Err Result with both stdout and stderr
-        Err(match output.status.code() {
-            Some(code) => format!("blueprint-compiler exit code: {}\n{}\n{}", code, compiled_blp, String::from_utf8(output.stderr).unwrap()),
-            None => format!("{}\n{}", compiled_blp, String::from_utf8(output.stderr).unwrap())
-        })
+        let compiled_blp = String::from_utf8(output.stdout).unwrap();
+        let error = String::from_utf8(output.stderr).unwrap();
+        
+        if output.status.success() {
+            return Ok(compiled_blp)
+        } else {
+            // When blueprint-compiler reaches an error in the blueprint file's source code
+            // it will exit with 1 and the error info in stdout. Other errors will be written
+            // to stderr. To show all errors, return Err Result with both stdout and stderr
+            return Err(match output.status.code() {
+                Some(code) => format!("blueprint-compiler exit code: {}\n{}\n{}", code, compiled_blp, error),
+                None => format!("{}\n{}", compiled_blp, error)
+            })
+        }
     }
+
+    Err("Blueprint Compiler not found. Make sure it is in $PATH or ./blueprint-compiler/blueprint-compiler.py".to_string())
 }
