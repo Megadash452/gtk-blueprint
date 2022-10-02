@@ -1,7 +1,7 @@
 [package]
 name = "gtk-blueprint"
 description = "Use Blueprint in Rust GTK applications"
-version = "0.1.1"
+version = "0.2.0"
 repository = "https://github.com/Megadash452/gtk-blueprint"
 readme = "README.md"
 license = "GPL-3.0"
@@ -16,7 +16,5 @@ proc-macro = true
 [dependencies]
 syn = "1.0.100"
 # phf = { version = "0.11.1", default-features = false } # for compiled equivalent of hashmap
-
-# [build-dependencies]
-# phf_codegen = "0.11.1"
+phf_codegen = "0.11.1"
 
